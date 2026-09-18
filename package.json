@@ -1,0 +1,51 @@
+{
+  "name": "bot-crossing-hive",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fork of bot-crossing for teams: one shared city per project, built cumulatively out of every completed agent thread across every teammate's machine.",
+  "license": "MIT",
+  "author": "Jarren Rocks",
+  "homepage": "https://botcrossing.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jarrenrocks/bot-crossing.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jarrenrocks/bot-crossing/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "coding-agent",
+    "three.js",
+    "webgl",
+    "colony-sim",
+    "developer-tools",
+    "visualization"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "os": [
+    "darwin",
+    "win32",
+    "linux"
+  ],
+  "scripts": {
+    "dev": "npm run assets --silent && vite",
+    "build": "npm run assets --silent && vite build",
+    "start": "vite build && node server/serve.mjs",
+    "serve": "node server/serve.mjs",
+    "assets": "node tools/build-assets.mjs",
+    "test": "node --test \"test/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "@mdi/js": "^7.4.47",
+    "three": "^0.185.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
+    "vite": "^7.1.0"
+  }
+}
