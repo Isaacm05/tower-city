@@ -73,6 +73,30 @@ Adding another is one new file in `server/harnesses/` and one line in its `index
 interface, thread shape and ground rules are written down in
 [`server/harnesses/README.md`](server/harnesses/README.md).
 
+## How you launch a session
+
+**New conversation** doesn't just pick a harness — it also asks *how* to open it: the desktop
+app, [Wave Terminal](https://waveterm.dev), or a plain terminal, crossed with every detected
+harness. Same for resuming an existing thread. Picking one calls straight through to
+`server/api.mjs`'s `present()`, which honours it as an override rather than guessing:
+
+- **App** forces the harness's own deep link (`claude://…`, `codex://…`) and fails outright if
+  nothing on the machine answers it, rather than silently falling back to a terminal.
+- **WaveTerm** tries only Wave Terminal (via its own `wsh` CLI) and reports *its* failure if Wave
+  isn't running, instead of quietly trying something else.
+- **Terminal** skips Wave even if it's running, for a plain console/Windows Terminal session
+  specifically.
+
+**Using WaveTerm needs two environment variables Wave doesn't hand a detached process for free**:
+`WAVETERM_JWT` and `WAVETERM_TABID`. An *interactive* Wave Terminal tab has these injected
+automatically, so running `npm run dev` from inside one should just work. Starting the dev
+server any other way — a plain terminal, an IDE's integrated terminal, a background launcher —
+won't have them, and every WaveTerm-targeted launch will fail. Get fresh values from any real
+Wave Terminal block (`echo $env:WAVETERM_JWT` / `echo $env:WAVETERM_TABID` in PowerShell) and set
+them in the environment the server actually runs in if you need it working from somewhere else.
+See [`server/lib/win.mjs`](server/lib/win.mjs) for exactly how they're used, and
+[TODO.md](TODO.md) for the current state of getting this fully verified end-to-end.
+
 ## Layout
 
 ```
