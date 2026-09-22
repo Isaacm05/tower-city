@@ -291,15 +291,24 @@ async function tryWave(argv, cwd, tag) {
  * `tag` is a stable id for the thread being opened — `claude-code:<uuid>`, `codex:<uuid>` — used
  * only to dedupe against an existing Wave Terminal block; every other launcher here ignores it,
  * since neither `wt.exe` nor a bare console window has anything comparable to search.
+ *
+ * `transport` lets a caller skip the automatic "Wave, then Windows Terminal, then a bare
+ * console" fallback chain: `'waveterm'` tries only Wave and reports its own failure rather than
+ * silently falling through to a different terminal; `'cli'` skips Wave entirely, for someone who
+ * specifically wants a plain terminal even on a machine that also has Wave running. Undefined (or
+ * any other value) keeps the original try-everything behaviour.
  */
-export async function openInTerminal(argv, cwd, tag) {
+export async function openInTerminal(argv, cwd, tag, transport) {
   const wellFormed = Array.isArray(argv) && argv.length > 0 && argv.every((a) => typeof a === 'string' && a)
   if (!wellFormed || !path.isAbsolute(argv[0]) || typeof cwd !== 'string' || !path.isAbsolute(cwd)) {
     return { ok: false, error: 'Invalid launch command' }
   }
 
-  const viaWave = await tryWave(argv, cwd, tag)
-  if (viaWave.ok) return viaWave
+  if (transport !== 'cli') {
+    const viaWave = await tryWave(argv, cwd, tag)
+    if (viaWave.ok) return viaWave
+    if (transport === 'waveterm') return { ok: false, error: viaWave.error || 'Wave Terminal is not running, or wsh is not on PATH' }
+  }
 
   const wtArgs = ['-w', '0', 'new-tab', '--title', path.basename(cwd), '-d', cwd, '--', ...argv]
   const viaWt = await trySpawn('wt.exe', wtArgs, cwd)

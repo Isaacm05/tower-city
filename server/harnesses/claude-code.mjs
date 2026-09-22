@@ -18,6 +18,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { exists, findExecutable, jsonLines, listDirs, listFiles, num, readHead, readTail } from '../lib/fsutil.mjs'
+import { countLinesOfCode } from '../lib/loc-counter.mjs'
 
 const HOME = os.homedir()
 
@@ -398,6 +399,11 @@ async function scanThreads() {
       archived: s.isArchived === true || s.isArchived === 'True',
       hasTranscript: Boolean(entry),
       sizeBytes: entry?.size || 0,
+      // `transcriptFile` itself never leaves this module — `toThread()` below strips it as
+      // internal bookkeeping, the same way it hides the session ids behind `ref`. Lines of
+      // code has to be computed here, while the real path is still in hand, and kept as an
+      // ordinary public field (like `sizeBytes`) so it survives that strip.
+      linesOfCode: entry ? await countLinesOfCode(entry.file) : 0,
       transcriptFile: entry?.file || '',
       source: 'desktop',
     })
@@ -436,6 +442,7 @@ async function scanThreads() {
       archived: false,
       hasTranscript: true,
       sizeBytes: entry.size,
+      linesOfCode: await countLinesOfCode(entry.file),
       transcriptFile: entry?.file || '',
       source: 'cli',
     })

@@ -1,6 +1,9 @@
 node_modules
 dist
 
+# Local overrides (BOT_CROSSING_HOST, etc.) — never committed.
+.env
+
 # Your colony: which repo sits on which plot, and what you archived. Holds the names and
 # paths of the repos you work in, so it stays out of the repository.
 data/*.json
@@ -42,3 +45,10 @@ tools/bin/
 # sees the same skills Claude Code does. Absolute-path links pointing at this machine's own
 # .claude/skills — meaningless (and unresolvable) on another machine or checkout.
 .agents/skills/
+
+# Per-session cooldown markers for the project-level "keep .agent-context.md updated" Stop
+# hooks (Claude Code's and Antigravity's) — empty files whose only purpose is their own mtime,
+# named by session/conversation id. Pure noise to commit: every session, on every machine,
+# would add one more, forever.
+.claude/hooks/.stop-markers/
+.agents/.stop-markers/

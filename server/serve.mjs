@@ -3,6 +3,8 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { apiMiddleware } from './api.mjs'
+import { scanThreads } from './scan.mjs'
+import { startHiveSync } from './lib/hive-git.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -61,3 +63,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`Bot Crossing → http://${HOST}:${PORT}`)
 })
+
+startHiveSync(scanThreads)

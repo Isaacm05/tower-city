@@ -541,6 +541,12 @@ class Flock {
     this.count = Math.max(0, Math.round(spec.count ?? 14))
     this.altitude = spec.altitude || [14, 22]
     this.size = spec.size ?? 1
+    // How far the flock's wander target roams from the origin. Optional and additive — every
+    // existing caller leaves `spec.range` unset and gets today's exact `FLOCK_RANGE`; a small
+    // single-plot scene (see src/towers/) can pass a tighter one so the flock actually stays
+    // near the one thing there is to fly over, instead of wandering a radius sized for a whole
+    // multi-plot colony.
+    this.range = spec.range ?? FLOCK_RANGE
 
     const geo = scaleTagged(birdGeometry(this.kind), this.size)
     phaseAttribute(geo, this.count, this.rand)
@@ -603,7 +609,7 @@ class Flock {
 
   _pickTarget() {
     const a = this.rand() * Math.PI * 2
-    const r = Math.sqrt(this.rand()) * FLOCK_RANGE
+    const r = Math.sqrt(this.rand()) * this.range
     this.tx = Math.cos(a) * r
     this.tz = Math.sin(a) * r
     // Altitude is above whatever is under the target — hills at the edge of the range are
@@ -682,7 +688,7 @@ class Flock {
       fx += (this.tx - p.x) * 0.02
       fz += (this.tz - p.z) * 0.02
       const r2 = p.x * p.x + p.z * p.z
-      if (r2 > FLOCK_RANGE * FLOCK_RANGE) {
+      if (r2 > this.range * this.range) {
         fx -= p.x * 0.05
         fz -= p.z * 0.05
       }

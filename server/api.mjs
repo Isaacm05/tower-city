@@ -21,6 +21,8 @@ import {
   scanThreads,
   disambiguateProjects,
 } from './scan.mjs'
+import { readTeamAgents, projectPathsOf } from './lib/hive-git.mjs'
+import { ensureProjectSetup } from './lib/project-setup.mjs'
 
 const execFileAsync = promisify(execFile)
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -697,12 +699,20 @@ async function convertToMarkdown(buffer, filename) {
  * check as any other folder the page names. There is no fallback directory on purpose:
  * `claude --resume` looks a session up under the folder it ran in, and a terminal that opens on
  * "No conversation found" and closes is worse than an error toast.
+ *
+ * `transport` is the page overriding that automatic choice: `'gui'` forces the deep link and
+ * fails rather than falling back to a terminal; `'waveterm'`/`'cli'` skip the deep-link probe
+ * entirely and go straight to a terminal — `'waveterm'` failing outright if Wave Terminal itself
+ * doesn't answer, rather than the auto path's silent fall-through to Windows Terminal. Undefined
+ * keeps the original automatic behaviour. Only meaningful on win32/Linux — macOS has never had a
+ * terminal path here at all, so anything but `'gui'`/undefined is simply not offered there.
  */
-async function present(result) {
+async function present(result, transport) {
   // Only the reason reaches the page: a failure may still carry the adapter's command.
   if (!result || !result.ok) return { ok: false, error: result?.error || 'Nothing to open' }
 
   if (process.platform === 'darwin') {
+    if (transport && transport !== 'gui') return { ok: false, error: 'Only the app itself can be opened from here on macOS' }
     if (!result.url) return { ok: false, error: 'That harness has no deep link to open on this platform' }
     launch(result.url)
     // A note is the adapter saying it opened *something* — the repo rather than the thread.
@@ -714,9 +724,14 @@ async function present(result) {
       ? { hasHandler: schemeHasHandlerWin, openInTerminal: openInTerminalWin, schemeOf: schemeOfWin }
       : { hasHandler: schemeHasHandler, openInTerminal, schemeOf }
 
-  if (result.url && (await desktop.hasHandler(result.url))) {
+  const wantsTerminal = transport === 'waveterm' || transport === 'cli'
+  if (!wantsTerminal && result.url && (await desktop.hasHandler(result.url))) {
     launch(result.url)
     return { ok: true, url: result.url }
+  }
+  if (transport === 'gui') {
+    const scheme = desktop.schemeOf(result.url)
+    return { ok: false, error: scheme ? `Nothing on this machine opens ${scheme}:// links` : 'That harness has no app to open here' }
   }
   if (result.command) {
     if (!result.command.cwd) return { ok: false, error: 'That thread has no folder on record to resume in' }
@@ -726,7 +741,7 @@ async function present(result) {
     // terminal gets the blame; say what is actually wrong instead.
     const enterable = await fsp.access(cwd, fsp.constants.X_OK).then(() => true, () => false)
     if (!enterable) return { ok: false, error: 'The folder that thread ran in cannot be entered' }
-    return desktop.openInTerminal(result.command.argv, cwd, result.command.id)
+    return desktop.openInTerminal(result.command.argv, cwd, result.command.id, transport)
   }
   const scheme = desktop.schemeOf(result.url)
   return {
@@ -897,8 +912,33 @@ export async function apiMiddleware(req, res, next) {
         ...threads.map(t => ({ ...t, project: t.projectPath ? path.basename(t.projectPath) : t.project })),
         ...saved.map(p => ({ project: p.name, projectPath: p.path })),
       ])
+      // `linesOfCode` already rides on each thread from its own harness (claude-code.mjs
+      // computes it while `entry.file` is still in scope) — `transcriptFile` itself never
+      // reaches here, stripped as internal bookkeeping before `scanThreads()` even returns.
+      // An earlier version of this line tried to recompute it from `t.transcriptFile` and
+      // silently got 0 for every thread, always — caught only once fake demo data stopped
+      // masking it. Real fix belongs at the harness, not here; see claude-code.mjs.
+      const localThreads = combined.slice(0, threads.length)
+
+      // Every teammate's completed threads, read straight out of `.hive/agents/` in each project
+      // you have cloned locally — you can only see a project's shared agents if you also have
+      // that project's repo, which is inherent to storing this in the repo itself rather than an
+      // external service. One project's read failing (a permissions hiccup, say) costs that
+      // project's hive threads, never the local list this endpoint has always returned.
+      const localIds = new Set(localThreads.map((t) => t.id))
+      const remoteThreads = []
+      for (const [projectPath, { project }] of projectPathsOf(localThreads)) {
+        try {
+          for (const t of await readTeamAgents(projectPath, project)) {
+            if (!localIds.has(t.id)) remoteThreads.push(t)
+          }
+        } catch (err) {
+          warnings.push(`hive (${project}): ${err?.message || err}`)
+        }
+      }
+
       return send(res, 200, {
-        threads: combined.slice(0, threads.length),
+        threads: [...localThreads, ...remoteThreads],
         projects: saved.map((p, i) => ({ ...p, name: combined[threads.length + i].project })),
         scannedAt: Date.now(), warnings,
       })
@@ -976,6 +1016,21 @@ export async function apiMiddleware(req, res, next) {
       }
     }
 
+    // Provisions `.agent-context.md`, a project-level Stop hook reminding a session to keep it
+    // updated, and the `.claude/settings.json` entry registering that hook — all committed to
+    // the repo (nothing here runs `git add`/`commit`/`push` itself) so every teammate who clones
+    // it gets the same nudge, not just whoever happened to set one up personally.
+    if (url.pathname === '/api/hive/setup' && req.method === 'POST') {
+      try {
+        const { folder } = await readJsonBody(req)
+        const dir = await resolveFolder(folder)
+        if (!dir) return send(res, 404, { error: 'That folder is not on this machine any more.' })
+        return send(res, 200, await ensureProjectSetup(dir))
+      } catch (err) {
+        return send(res, err.status || 500, { error: err.message || String(err) })
+      }
+    }
+
     if (url.pathname === '/api/state' && req.method === 'GET') {
       return send(res, 200, await readState())
     }
@@ -1008,8 +1063,8 @@ export async function apiMiddleware(req, res, next) {
     }
 
     if (url.pathname === '/api/open' && req.method === 'POST') {
-      const { harness, ref } = await readJsonBody(req)
-      const shown = await present(await harnessOpenThread(harness, ref))
+      const { harness, ref, transport } = await readJsonBody(req)
+      const shown = await present(await harnessOpenThread(harness, ref), transport)
       return send(res, shown.ok ? 200 : 400, shown)
     }
 
@@ -1029,7 +1084,7 @@ export async function apiMiddleware(req, res, next) {
       (url.pathname === '/api/new-session' || url.pathname === '/api/reveal' || url.pathname === '/api/open-editor') &&
       req.method === 'POST'
     ) {
-      const { folder, harness } = await readJsonBody(req)
+      const { folder, harness, transport } = await readJsonBody(req)
       const dir = await resolveFolder(folder)
       if (!dir) return send(res, 400, { ok: false, error: 'That folder is not on this machine any more' })
 
@@ -1041,7 +1096,7 @@ export async function apiMiddleware(req, res, next) {
         const result = await openEditor(dir)
         return send(res, result.ok ? 200 : 400, result)
       }
-      const shown = await present(await harnessNewSession(harness || (await defaultHarness()), dir))
+      const shown = await present(await harnessNewSession(harness || (await defaultHarness()), dir), transport)
       return send(res, shown.ok ? 200 : 400, shown)
     }
 

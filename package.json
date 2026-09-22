@@ -1,19 +1,10 @@
 {
-  "name": "bot-crossing-hive",
+  "name": "tower-city",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Fork of bot-crossing for teams: one shared city per project, built cumulatively out of every completed agent thread across every teammate's machine.",
+  "description": "A shared skyline grown out of a team's agent threads — fork of bot-crossing, synced through git instead of a server.",
   "license": "MIT",
-  "author": "Jarren Rocks",
-  "homepage": "https://botcrossing.com",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jarrenrocks/bot-crossing.git"
-  },
-  "bugs": {
-    "url": "https://github.com/jarrenrocks/bot-crossing/issues"
-  },
   "keywords": [
     "claude-code",
     "coding-agent",
@@ -34,8 +25,8 @@
   "scripts": {
     "dev": "npm run assets --silent && vite",
     "build": "npm run assets --silent && vite build",
-    "start": "vite build && node server/serve.mjs",
-    "serve": "node server/serve.mjs",
+    "start": "vite build && node --env-file-if-exists=.env server/serve.mjs",
+    "serve": "node --env-file-if-exists=.env server/serve.mjs",
     "assets": "node tools/build-assets.mjs",
     "test": "node --test \"test/**/*.test.mjs\""
   },

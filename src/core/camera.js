@@ -50,6 +50,10 @@ export class CameraRig {
     this.camera = camera
     this.dom = domElement
     this.settings = settings
+    // Off by default — every existing caller keeps today's exact "drag pans, modifier+drag
+    // orbits" behaviour. A single-deck view with nothing to pan *to* has more use for a plain
+    // drag turning the camera around the one thing on screen instead.
+    this.dragRotates = false
 
     this.target = new THREE.Vector3(0, 0, 0)
     this.desiredTarget = this.target.clone()
@@ -137,8 +141,10 @@ export class CameraRig {
       return
     }
 
-    // Right, middle, ctrl or shift all mean "tilt and rotate", as in Earth.
-    const orbit = e.button === 2 || e.button === 1 || e.ctrlKey || e.shiftKey || e.altKey
+    // Right, middle, ctrl or shift all mean "tilt and rotate", as in Earth — unless
+    // `dragRotates` has swapped the two, in which case a plain drag is the one that orbits.
+    const modified = e.button === 2 || e.button === 1 || e.ctrlKey || e.shiftKey || e.altKey
+    const orbit = this.dragRotates ? !modified : modified
     this._mode = orbit ? 'orbit' : 'pan'
     this._last.set(e.clientX, e.clientY)
     this.interacting = true

@@ -91,10 +91,17 @@ export async function saveState(state) {
  * thread again, and the browser only ever passes it straight back. Nothing in the UI knows
  * what a Claude Code session id, or a Codex rollout id, actually looks like.
  */
-export const openThread = (thread) => post('/api/open', { harness: thread.harness, ref: thread.ref })
+export const openThread = (thread, transport) => post('/api/open', { harness: thread.harness, ref: thread.ref, transport })
 
-/** A brand new thread in a repo, via that harness's own new-session deep link. */
-export const newSession = (folder, harness) => post('/api/new-session', { folder, harness })
+/**
+ * A brand new thread in a repo, via that harness's own new-session deep link.
+ *
+ * `transport` overrides how the server opens it: `'gui'` forces the desktop app (fails rather
+ * than falling back to a terminal), `'waveterm'`/`'cli'` force a terminal — Wave Terminal only,
+ * or skipping Wave even when it's running — instead of letting the server pick automatically.
+ * Omit it for the original automatic behaviour.
+ */
+export const newSession = (folder, harness, transport) => post('/api/new-session', { folder, harness, transport })
 
 export const revealFolder = (folder) => post('/api/reveal', { folder })
 
@@ -163,3 +170,8 @@ export const addMarketplace = (source) => post('/api/marketplaces/add', { source
 
 /** A PDF/doc/image, converted to markdown via `markitdown` on the server. */
 export const convertToMarkdown = (filename, dataBase64) => post('/api/convert-to-markdown', { filename, dataBase64 })
+
+/** Provisions `.agent-context.md` and a project-level Stop hook reminding a session to keep it
+ * updated — committed to the repo like any other file, so every teammate who clones it gets the
+ * same nudge. Idempotent: safe to call on a project that already has either. */
+export const setupProjectHive = (folder) => post('/api/hive/setup', { folder })
