@@ -8,7 +8,7 @@ import { startHiveSync } from './lib/hive-git.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
-const PORT = Number(process.env.PORT) || 5274
+const PORT = Number(process.env.PORT) || 5275
 const HOST = process.env.BOT_CROSSING_HOST || '127.0.0.1'
 
 const TYPES = {
@@ -61,7 +61,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, HOST, () => {
-  console.log(`Bot Crossing → http://${HOST}:${PORT}`)
+  console.log(`Tower City → http://${HOST}:${PORT}`)
 })
 
 startHiveSync(scanThreads)
