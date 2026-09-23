@@ -160,6 +160,36 @@ export async function setNickname(projectPath, threadId, nickname) {
   await fsp.writeFile(file, JSON.stringify(data, null, 2), 'utf8')
 }
 
+/**
+ * Every immediate subdirectory of the workspace that already has a `.hive/agents/` folder —
+ * found purely by that folder's presence, with no local thread and no explicit "+ Add project"
+ * required. This is what makes a project's shared skyline visible on a machine that has never
+ * run a real agent session against it: without this, `readTeamAgents` only ever gets called for
+ * a project this machine's own scan already knows about (see `projectPathsOf` below), which
+ * means a fresh clone that hasn't done anything locally yet can never even ask the question,
+ * let alone see a teammate's synced data answer it. One level deep only, and every per-folder
+ * check wrapped so one unreadable/permission-denied folder costs that folder, not the whole scan.
+ */
+export async function discoverHiveProjects(workspaceRoot) {
+  if (!workspaceRoot) return []
+  let entries
+  try {
+    entries = await fsp.readdir(workspaceRoot, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const found = []
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+    const dir = path.join(workspaceRoot, entry.name)
+    const hasHive = await fsp
+      .access(path.join(dir, HIVE_DIR))
+      .then(() => true, () => false)
+    if (hasHive) found.push({ name: entry.name, path: dir })
+  }
+  return found
+}
+
 /** Every project path with at least one local completed thread, so the sync loop knows which
  * repos actually need a `.hive/agents/<device-id>.json` written. */
 export function projectPathsOf(threads) {

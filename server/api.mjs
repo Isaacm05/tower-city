@@ -21,15 +21,19 @@ import {
   scanThreads,
   disambiguateProjects,
 } from './scan.mjs'
-import { readTeamAgents, projectPathsOf } from './lib/hive-git.mjs'
+import { readTeamAgents, projectPathsOf, discoverHiveProjects } from './lib/hive-git.mjs'
 import { ensureProjectSetup } from './lib/project-setup.mjs'
 
 const execFileAsync = promisify(execFile)
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = process.env.BOT_CROSSING_DATA || path.join(here, '..', 'data')
 const STATE_FILE = path.join(DATA_DIR, 'colony.json')
+// Same resolution `projectStore`'s own default uses — kept as a separate constant here rather
+// than reaching into the store for it, since discovering hive-only projects (see /api/threads)
+// needs the raw folder, not the store's own bookkeeping.
+const WORKSPACE_ROOT = process.env.BOT_CROSSING_WORKSPACE || path.resolve(here, '../..')
 const projects = projectStore({ data: DATA_DIR })
-const writeContext = contextWriter(process.env.BOT_CROSSING_WORKSPACE || path.resolve(here, '../..'))
+const writeContext = contextWriter(WORKSPACE_ROOT)
 
 const STATE_VERSION = 2
 
@@ -925,9 +929,30 @@ export async function apiMiddleware(req, res, next) {
       // that project's repo, which is inherent to storing this in the repo itself rather than an
       // external service. One project's read failing (a permissions hiccup, say) costs that
       // project's hive threads, never the local list this endpoint has always returned.
+      //
+      // Three sources feed the set of projects actually checked, not just local threads — a
+      // machine with zero local activity on a project (a fresh clone, or a teammate who has
+      // never run an agent there) would otherwise never even ask the question, since
+      // `projectPathsOf` alone only knows about projects *this* scan already found threads in:
+      //   1. `projectPathsOf(localThreads)` — the original behaviour, unchanged.
+      //   2. `saved` — explicitly "+ Add project"-ed folders, even ones with no threads yet.
+      //   3. `discoverHiveProjects` — any workspace subfolder that already has a `.hive/agents/`
+      //      folder on disk, found by presence alone, no add and no local thread required. This
+      //      is what makes a project's shared skyline visible on a brand new machine at all.
+      const projectCandidates = new Map()
+      for (const [projectPath, { project }] of projectPathsOf(localThreads)) {
+        projectCandidates.set(projectPath, project)
+      }
+      saved.forEach((p, i) => {
+        if (!projectCandidates.has(p.path)) projectCandidates.set(p.path, combined[threads.length + i].project)
+      })
+      for (const { name, path: dir } of await discoverHiveProjects(WORKSPACE_ROOT)) {
+        if (!projectCandidates.has(dir)) projectCandidates.set(dir, name)
+      }
+
       const localIds = new Set(localThreads.map((t) => t.id))
       const remoteThreads = []
-      for (const [projectPath, { project }] of projectPathsOf(localThreads)) {
+      for (const [projectPath, project] of projectCandidates) {
         try {
           for (const t of await readTeamAgents(projectPath, project)) {
             if (!localIds.has(t.id)) remoteThreads.push(t)
