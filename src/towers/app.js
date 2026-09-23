@@ -35,9 +35,10 @@ import { TowerColony, tunedPlanet } from './tower-colony.js'
 
 /**
  * Tower City — the app. Same sidebar, skills manager, settings, project chrome and astronaut
- * crew as the original bot-crossing (`src/main.js`), ported here rather than added to that
- * file, since this view's purpose is different: one project's skyline, grown by lines of code,
- * not a map of every project's threads at once.
+ * crew as the original bot-crossing's own boot script (`src/main.js`, since removed from this
+ * repo — see Bot Crossing itself for the multi-project map this was ported from), ported here
+ * rather than added to that file, since this view's purpose is different: one project's
+ * skyline, grown by lines of code, not a map of every project's threads at once.
  *
  * Deliberately dropped from this first pass, versus the original: ambient sound, hammering
  * particle sparks, and per-project ground-layout persistence (a single deck always regrows

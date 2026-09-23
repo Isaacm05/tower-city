@@ -21,9 +21,10 @@ separate wiki nobody opens.
 npm install && npm run dev
 ```
 
-Open `http://localhost:5173/tower-city.html` (or whatever port Vite prints) — that's the shared
-skyline view. `index.html` is still the original multi-project colony map, untouched, if you want
-it too.
+Open `http://localhost:5274` (the port Vite prints) — that's Tower City. This repo only ever
+serves Tower City now; the original multi-project colony map lives in
+[Bot Crossing](https://github.com/jarrenrocks/bot-crossing) itself, untouched, if you want that
+view too.
 
 Needs **Node 22.13+** (a couple of things — Codex's session titles, the Antigravity harness —
 degrade gracefully but silently on older Node; `/api/harnesses` says exactly why if something's

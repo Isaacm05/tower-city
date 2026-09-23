@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import { apiMiddleware } from './server/api.mjs'
 import { scanThreads } from './server/scan.mjs'
@@ -19,13 +18,5 @@ export default defineConfig({
   server: { port: Number(process.env.PORT) || 5274, strictPort: false },
   build: {
     target: 'esnext',
-    // Tower City is a second, separate page (see src/towers/main.js) — listed explicitly so
-    // `npm run build` bundles it too, not just the original index.html.
-    rollupOptions: {
-      input: {
-        main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        towerCity: fileURLToPath(new URL('./tower-city.html', import.meta.url)),
-      },
-    },
   },
 })
