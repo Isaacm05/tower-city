@@ -1239,13 +1239,19 @@ async function boot() {
     fetchHarnesses()
       .then((res) => {
         harnesses = res.harnesses || []
+        // A harness can be `detected: true` and still silently miss features (Codex titles,
+        // Antigravity threads entirely) on an old Node install — surface that instead of
+        // leaving a teammate wondering why threads just don't show up.
+        for (const h of harnesses) if (h.detected && h.error) hud.toast(h.error, 'err')
       })
       .catch(() => {}),
     settle(loadKit()),
     settle(loadCrew()),
   ])
   if (kitError || crewError) {
-    hud.toast('Could not load the model assets — run `npm run assets`', 'err')
+    // No towers (or no crew) will ever render until this is fixed, so the default 3.6s toast —
+    // easy to miss, and gone long before anyone notices the deck is still empty — isn't enough.
+    hud.toast('Could not load the model assets — check your connection and reload', 'err', 15000)
     console.error(kitError || crewError)
   }
   colony.astronauts.setRig(crewRig())

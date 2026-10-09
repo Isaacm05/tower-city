@@ -1230,7 +1230,7 @@ export class Hud {
     this._hintTimer = setTimeout(() => el.classList.remove('on'), ms)
   }
 
-  toast(message, kind = '') {
+  toast(message, kind = '', ms = 3600) {
     const el = document.createElement('div')
     el.className = `toast panel ${kind}`
     el.textContent = message
@@ -1238,7 +1238,7 @@ export class Hud {
     setTimeout(() => {
       el.classList.add('leaving')
       setTimeout(() => el.remove(), 260)
-    }, 3600)
+    }, ms)
   }
 
   // ── visibility ──────────────────────────────────────────────────────────────────────

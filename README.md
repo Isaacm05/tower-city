@@ -15,24 +15,45 @@ separate wiki nobody opens.
 > engine, camera, asset pipeline and harness-adapter system — all of that credit belongs to
 > [Jarren Rocks](https://jarren.rocks) and is unchanged here. See [Licence](#licence) below.
 
-## Run it
+## Run it locally
+
+**Prerequisites:** [Node.js](https://nodejs.org) **22.13 or newer**, and `git` on your `PATH`.
+Check your version first — this is the #1 cause of "it mostly works but some things are
+missing":
 
 ```bash
-npm install && npm run dev
+node --version
 ```
 
-Open `http://localhost:5274` (the port Vite prints) — that's Tower City. This repo only ever
-serves Tower City now; the original multi-project colony map lives in
+If that's below `v22.13.0`, install a newer Node (via [nvm](https://github.com/nvm-sh/nvm),
+[nvm-windows](https://github.com/coreybutler/nvm-windows), or nodejs.org) before continuing. An
+older Node won't fail outright — `npm install` only warns — but Codex thread titles and the
+whole Antigravity harness silently stop working, with no error until you go looking.
+
+Then, from the repo root:
+
+```bash
+npm install
+npm run dev
+```
+
+Open **http://localhost:5275** (Vite prints the actual port — it falls back to a random free
+one if 5275 is taken). That's Tower City. This repo only ever serves Tower City now; the
+original multi-project colony map lives in
 [Bot Crossing](https://github.com/jarrenrocks/bot-crossing) itself, untouched, if you want that
 view too.
 
-Needs **Node 22.13+** (a couple of things — Codex's session titles, the Antigravity harness —
-degrade gracefully but silently on older Node; `/api/harnesses` says exactly why if something's
-missing). `npm test` runs the suite.
+`npm test` runs the suite.
+
+**If something's missing:** a harness detected on your machine but missing some of its features
+(old Node, a CLI not on `PATH`, etc.) now shows a toast on load explaining why. The same text is
+always available at `http://localhost:5275/api/harnesses` if you want to check without waiting
+for the toast.
 
 For a built version: `npm run build` then `npm run serve` (or `npm start` to do both). Binds to
-`127.0.0.1` by default — see [Keeping it local](#keeping-it-local) in the sections below,
-inherited unchanged from Bot Crossing.
+`127.0.0.1` by default — see Bot Crossing's own
+[Keeping it local](https://github.com/jarrenrocks/bot-crossing#keeping-it-local) section for how
+to expose it to your network instead, inherited unchanged here.
 
 ## What's actually different from Bot Crossing
 
