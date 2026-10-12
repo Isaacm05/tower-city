@@ -808,6 +808,226 @@ if (contextHead && contextEditBtn) {
   contextHead.insertBefore(downloadBtn, contextEditBtn)
 }
 
+// ── Hive Device Roster + Interactive Context Filter & Quick-Append Toolbar ────────────
+let activeContextTag = 'all'
+let activeContextQuery = ''
+let hiveDevicesList = []
+
+function filterContextMarkdown(md, tag, query) {
+  if ((!tag || tag === 'all') && !query) return md
+  const q = (query || '').trim().toLowerCase()
+  const t = tag && tag !== 'all' ? tag.toLowerCase() : ''
+  const lines = (md || '').split('\n')
+  const out = []
+  let keepContinuation = false
+  let currentHeading = ''
+
+  const matchesCategory = (lineLower, headingLower) => {
+    if (!t) return true
+    if (lineLower.includes(`[${t}]`)) return true
+    if (t === 'decision') {
+      return /decision|non-goal|schema|architecture|why\b/.test(headingLower) ||
+        /\b(chose|instead of|deliberately|non-goal|never)\b/.test(lineLower)
+    }
+    if (t === 'gotcha') {
+      return /gotcha|lesson|bug|fix|trap/.test(headingLower) ||
+        /\b(bug|fix|broke|trap|fail|error|silently|clobber|caveat)\b/.test(lineLower)
+    }
+    if (t === 'todo') {
+      return /todo|open question|next|remaining/.test(headingLower) ||
+        /\b(todo|verify|tbd|not yet|check)\b/.test(lineLower)
+    }
+    return false
+  }
+
+  for (const line of lines) {
+    const isHeading = /^#{1,6}\s+/.test(line)
+    const isBullet = /^\s*[-*]\s+/.test(line)
+    const isBlank = line.trim() === ''
+
+    if (isHeading) {
+      currentHeading = line.toLowerCase()
+      out.push(line)
+      keepContinuation = false
+    } else if (isBlank) {
+      out.push(line)
+      keepContinuation = false
+    } else if (isBullet) {
+      const lower = line.toLowerCase()
+      const matchesTag = matchesCategory(lower, currentHeading)
+      const matchesQuery = !q || lower.includes(q)
+      if (matchesTag && matchesQuery) {
+        out.push(line)
+        keepContinuation = true
+      } else {
+        keepContinuation = false
+      }
+    } else if (keepContinuation) {
+      out.push(line)
+    } else if (!t && q && line.toLowerCase().includes(q)) {
+      out.push(line)
+    }
+  }
+  return out.join('\n')
+}
+
+function highlightContextHtml(html, query) {
+  let result = html.replace(
+    /\[(decision|gotcha|todo|firefly)\]/gi,
+    '<span style="padding:1px 6px;border-radius:4px;background:rgba(96,165,250,.22);color:#93c5fd;font-size:12px;font-family:monospace;">[$1]</span>'
+  )
+  const q = (query || '').trim()
+  if (!q) return result
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  return result
+    .split(/(<[^>]+>)/g)
+    .map((part) =>
+      part.startsWith('<')
+        ? part
+        : part.replace(
+            regex,
+            '<mark style="background:rgba(250,204,21,.35);color:#fef08a;padding:1px 3px;border-radius:3px;font-weight:600;">$1</mark>'
+          )
+    )
+    .join('')
+}
+
+function insertQuickNoteIntoMarkdown(md, tag, text) {
+  const cleanText = (text || '').trim()
+  if (!cleanText) return md
+  const stamp = new Date().toISOString().slice(0, 10)
+  const bullet = `- **[${tag}]** *(${stamp})* ${cleanText}`
+  const lines = (md || '').split('\n')
+  const idx = lines.findIndex((l) => /^##\s+Lessons\s*&\s*Notes/i.test(l) || /^#\s+/.test(l))
+  if (idx !== -1) {
+    lines.splice(idx + 1, 0, '', bullet)
+    return lines.join('\n')
+  }
+  return `${bullet}\n\n${(md || '').trimStart()}`
+}
+
+if (contextSection && contextBody) {
+  const toolsBar = document.createElement('div')
+  toolsBar.className = 'context-hive-tools'
+  toolsBar.style.cssText =
+    'padding:12px 28px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.02);' +
+    'display:flex;flex-direction:column;gap:10px;font-size:12px;'
+
+  toolsBar.innerHTML = `
+    <div class="hive-roster" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-weight:600;color:var(--text);">Synced Hive Machines (.hive/agents)</span>
+      <div class="hive-device-badges" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <input type="search" class="ctx-search" placeholder="Search context notes (e.g., wake word, sqlite, hook)…"
+        style="flex:1;min-width:180px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;" />
+      <div class="ctx-tags" style="display:flex;gap:4px;flex-wrap:wrap;">
+        ${['all', 'decision', 'gotcha', 'todo', 'firefly']
+          .map(
+            (t) =>
+              `<button type="button" data-tag="${t}" class="btn ghost ctx-tag-btn" style="padding:4px 8px;font-size:11px;border-radius:6px;">${
+                t === 'all' ? 'All' : `[${t}]`
+              }</button>`
+          )
+          .join('')}
+      </div>
+    </div>
+    <form class="ctx-quick-add" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <select class="ctx-note-tag" style="padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel-solid);color:var(--text);font:inherit;">
+        <option value="decision">[decision]</option>
+        <option value="gotcha">[gotcha]</option>
+        <option value="todo">[todo]</option>
+        <option value="firefly">[firefly]</option>
+      </select>
+      <input type="text" class="ctx-note-input" placeholder="Quick-append a team note to Lessons & Notes…"
+        style="flex:1;min-width:200px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:inherit;" />
+      <button type="submit" class="btn" style="padding:6px 12px;font-size:12px;">+ Log Note</button>
+    </form>
+  `
+  contextSection.insertBefore(toolsBar, contextBody)
+
+  const badgesEl = toolsBar.querySelector('.hive-device-badges')
+  const searchInput = toolsBar.querySelector('.ctx-search')
+  const tagBtns = toolsBar.querySelectorAll('.ctx-tag-btn')
+  const quickForm = toolsBar.querySelector('.ctx-quick-add')
+  const noteTagSelect = toolsBar.querySelector('.ctx-note-tag')
+  const noteInput = toolsBar.querySelector('.ctx-note-input')
+
+  const refreshRenderedContext = () => {
+    if (hud.contextEditing || !hud._context?.exists) return
+    const filtered = filterContextMarkdown(hud._context.content, activeContextTag, activeContextQuery)
+    const rawHtml = renderContextMarkdown(filtered)
+    contextBody.innerHTML = highlightContextHtml(rawHtml, activeContextQuery)
+  }
+
+  const baseSetContext = hud.setContext.bind(hud)
+  hud.setContext = (data) => {
+    baseSetContext(data)
+    refreshRenderedContext()
+  }
+
+  searchInput.addEventListener('input', () => {
+    activeContextQuery = searchInput.value
+    refreshRenderedContext()
+  })
+
+  tagBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeContextTag = btn.dataset.tag
+      tagBtns.forEach((b) => {
+        b.style.background = b.dataset.tag === activeContextTag ? 'rgba(255,255,255,.16)' : ''
+      })
+      refreshRenderedContext()
+    })
+  })
+
+  quickForm.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const text = noteInput.value.trim()
+    if (!text) return
+    const folder = selectedProject && pathForProject(selectedProject)
+    if (!folder) {
+      hud.toast('No project folder found on disk', 'err')
+      return
+    }
+    try {
+      const current = hud._context?.content || `# ${selectedProject} — shared context\n\n## Overview\n\n## Lessons & Notes\n\n## Open Questions\n`
+      const updated = insertQuickNoteIntoMarkdown(current, noteTagSelect.value, text)
+      const saved = await saveContext(folder, updated, hud._context?.revision)
+      hud.setContext(saved)
+      noteInput.value = ''
+      hud.toast(`Logged [${noteTagSelect.value}] note to .agent-context.md`)
+    } catch (err) {
+      hud.toast(err.message || 'Could not save context note', 'err')
+    }
+  })
+
+  window.updateHiveDeviceBadges = async (folder) => {
+    if (!folder || !badgesEl) return
+    try {
+      const res = await fetch(`/api/hive/devices?path=${encodeURIComponent(folder)}`)
+      const data = await res.json()
+      hiveDevicesList = data.devices || []
+      if (!hiveDevicesList.length) {
+        badgesEl.innerHTML = '<span style="color:var(--muted);">No synced device files yet</span>'
+        return
+      }
+      badgesEl.innerHTML = hiveDevicesList
+        .map(
+          (d) =>
+            `<span style="padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:${
+              d.isSelf ? 'rgba(74,222,128,.15)' : 'rgba(96,165,250,.15)'
+            };color:var(--text);font-size:11px;" title="Device ${d.deviceId} (${d.harnesses.join(', ') || 'agent'})">` +
+            `<strong>${d.isSelf ? 'This PC' : 'Teammate'}</strong> (${d.shortId}) · ${d.threadCount} threads · ${d.linesOfCode.toLocaleString()} LOC</span>`
+        )
+        .join('')
+    } catch {
+      badgesEl.innerHTML = ''
+    }
+  }
+}
+
 // ── planet (background) ──────────────────────────────────────────────────────────────
 
 function applyPlanet() {
@@ -921,6 +1141,7 @@ async function loadProjectExtras(path) {
       if (extrasPath !== forPath) return
       hud.setSkills(skillsRes.skills || [], skillsRes.trashed || [])
       hud.setContext(contextRes)
+      if (window.updateHiveDeviceBadges) window.updateHiveDeviceBadges(forPath)
       extrasFetchedAt = Date.now()
     } catch {
       /* left as-is; extrasFetchedAt stays put so the next poll retries */

@@ -21,7 +21,7 @@ import {
   scanThreads,
   disambiguateProjects,
 } from './scan.mjs'
-import { readTeamAgents, projectPathsOf, discoverHiveProjects } from './lib/hive-git.mjs'
+import { readTeamAgents, projectPathsOf, discoverHiveProjects, readHiveDevices } from './lib/hive-git.mjs'
 import { ensureProjectSetup } from './lib/project-setup.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -1054,6 +1054,12 @@ export async function apiMiddleware(req, res, next) {
       } catch (err) {
         return send(res, err.status || 500, { error: err.message || String(err) })
       }
+    }
+
+    if (url.pathname === '/api/hive/devices' && req.method === 'GET') {
+      const dir = await resolveFolder(url.searchParams.get('path'))
+      if (!dir) return send(res, 200, { devices: [] })
+      return send(res, 200, { devices: await readHiveDevices(dir) })
     }
 
     if (url.pathname === '/api/state' && req.method === 'GET') {

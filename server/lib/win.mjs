@@ -307,7 +307,13 @@ export async function openInTerminal(argv, cwd, tag, transport) {
   if (transport !== 'cli') {
     const viaWave = await tryWave(argv, cwd, tag)
     if (viaWave.ok) return viaWave
-    if (transport === 'waveterm') return { ok: false, error: viaWave.error || 'Wave Terminal is not running, or wsh is not on PATH' }
+    if (transport === 'waveterm') {
+      const missingEnv = !process.env.WAVETERM_JWT || !process.env.WAVETERM_TABID
+      const hint = missingEnv
+        ? ' (WAVETERM_JWT / WAVETERM_TABID missing from server environment — start npm run dev from inside a Wave Terminal tab)'
+        : ''
+      return { ok: false, error: (viaWave.error || 'Wave Terminal is not running, or wsh is not on PATH') + hint }
+    }
   }
 
   const wtArgs = ['-w', '0', 'new-tab', '--title', path.basename(cwd), '-d', cwd, '--', ...argv]

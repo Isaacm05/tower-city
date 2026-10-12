@@ -10,7 +10,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { writeLocalAgents, readTeamAgents, setNickname, projectPathsOf, discoverHiveProjects } from '../server/lib/hive-git.mjs'
+import { writeLocalAgents, readTeamAgents, setNickname, projectPathsOf, discoverHiveProjects, readHiveDevices } from '../server/lib/hive-git.mjs'
 
 test('writeLocalAgents + readTeamAgents round-trip, and a nickname survives a resync', async () => {
   const projectPath = await fsp.mkdtemp(path.join(os.tmpdir(), 'hive-git-test-'))
@@ -84,5 +84,44 @@ test('discoverHiveProjects finds a project by .hive/agents/ presence alone — n
     assert.equal(remote[0].linesOfCode, 999)
   } finally {
     await fsp.rm(workspace, { recursive: true, force: true })
+  }
+})
+
+test('readHiveDevices aggregates local and remote teammate device files without conflict', async () => {
+  const projectPath = await fsp.mkdtemp(path.join(os.tmpdir(), 'hive-devices-test-'))
+  try {
+    await writeLocalAgents(projectPath, [
+      {
+        id: 'claude-code:local1',
+        project: 'firefly',
+        projectPath,
+        harness: 'claude-code',
+        hasTranscript: true,
+        hasLiveProcess: false,
+        lastActivityAt: Date.now(),
+        linesOfCode: 320,
+      },
+    ])
+    const hiveDir = path.join(projectPath, '.hive', 'agents')
+    await fsp.writeFile(
+      path.join(hiveDir, 'isaac-laptop-id.json'),
+      JSON.stringify({
+        device_id: 'isaac-laptop-id',
+        updated_at: '2026-10-11T12:00:00.000Z',
+        threads: [
+          { thread_id: 'claude-code:remote1', harness: 'claude-code', lines_of_code: 680, completed_at: '2026-10-11T12:00:00.000Z' },
+        ],
+      })
+    )
+
+    const devices = await readHiveDevices(projectPath)
+    assert.equal(devices.length, 2, 'both local machine and remote teammate device are listed')
+    assert.equal(devices[0].isSelf, true, 'local machine sorts first')
+    assert.equal(devices[0].linesOfCode, 320)
+    assert.equal(devices[1].deviceId, 'isaac-laptop-id')
+    assert.equal(devices[1].isSelf, false)
+    assert.equal(devices[1].linesOfCode, 680)
+  } finally {
+    await fsp.rm(projectPath, { recursive: true, force: true })
   }
 })

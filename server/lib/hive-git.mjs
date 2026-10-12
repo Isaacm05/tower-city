@@ -222,3 +222,43 @@ export function startHiveSync(scanThreads, intervalMs = Number(process.env.HIVE_
   timer.unref()
   return () => clearInterval(timer)
 }
+
+/** Returns a per-device summary of every `.hive/agents/<device-id>.json` file in the project,
+ * including both this machine (`isSelf: true`) and remote teammates (`isSelf: false`).
+ * Used by the Hive Contributors UI and empirical cross-machine verification. */
+export async function readHiveDevices(projectPath) {
+  if (!projectPath) return []
+  const selfId = await deviceId()
+  const dir = path.join(projectPath, HIVE_DIR)
+  let files
+  try {
+    files = await fsp.readdir(dir)
+  } catch {
+    return []
+  }
+
+  const devices = []
+  for (const name of files) {
+    if (!name.endsWith('.json')) continue
+    try {
+      const raw = await fsp.readFile(path.join(dir, name), 'utf8')
+      const data = JSON.parse(raw)
+      const id = data.device_id || name.replace(/\.json\$/, '')
+      const rows = Array.isArray(data.threads) ? data.threads : []
+      const totalLoc = rows.reduce((sum, r) => sum + (Number(r.lines_of_code) || 0), 0)
+      const harnesses = [...new Set(rows.map((r) => r.harness).filter(Boolean))]
+      devices.push({
+        deviceId: id,
+        shortId: id.slice(0, 8),
+        isSelf: id === selfId,
+        updatedAt: data.updated_at || null,
+        threadCount: rows.length,
+        linesOfCode: totalLoc,
+        harnesses,
+      })
+    } catch {
+      /* skip malformed or mid-write file */
+    }
+  }
+  return devices.sort((a, b) => (b.isSelf - a.isSelf) || (b.linesOfCode - a.linesOfCode))
+}
